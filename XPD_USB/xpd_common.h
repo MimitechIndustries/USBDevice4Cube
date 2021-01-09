@@ -168,8 +168,7 @@ typedef void ( *XPD_HandleCallbackType )    ( void * Handle );
 
 #define CLEAR_BIT(REG, BIT)   ((REG) &= ~(BIT))
 
-#undef MODIFY_REG
-#define MODIFY_REG(REG, CLEARMASK, SETMASK)  \
+#define MODIFY_REG_SUPER_SPECIAL_FOR_SOME_UNKNOWN_REASON_HAD_AN_UNDEF_AND_IT_WAS_BREAKING_EVERYTHING(REG, CLEARMASK, SETMASK)  \
     ((REG) = (((REG) & (~(CLEARMASK))) | ((SETMASK) & (CLEARMASK))))
 
 #define POSITION_VAL(VAL)     (__CLZ(__RBIT(VAL)))

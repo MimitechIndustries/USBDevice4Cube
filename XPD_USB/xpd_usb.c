@@ -778,7 +778,7 @@ void USB_vIRQHandler(USB_HandleType * pxUSB)
     if ((usISTR & USB_ISTR_WKUP) != 0)
     {
         /* Release low-power mode, clear any ongoing Remote Wakeup signaling */
-        CLEAR_BIT(USB->CNTR.w, USB_CNTR_FSUSP | USB_CNTR_LPMODE | USB_CNTR_RESUME);
+        CLEAR_BIT(USB->CNTR.w, USB_CNTR_FSUSP | USB_CNTR_LP_MODE | USB_CNTR_RESUME);
 
         USB_FLAG_CLEAR(pxUSB, WKUP);
 
@@ -810,7 +810,7 @@ void USB_vIRQHandler(USB_HandleType * pxUSB)
         USB_FLAG_CLEAR(pxUSB, SUSP);
 
         /* Force low-power mode in the macrocell */
-        SET_BIT(USB->CNTR.w, USB_CNTR_FSUSP | USB_CNTR_LPMODE);
+        SET_BIT(USB->CNTR.w, USB_CNTR_FSUSP | USB_CNTR_LP_MODE);
 
         if (USB_FLAG_STATUS(pxUSB, WKUP) == 0)
         {

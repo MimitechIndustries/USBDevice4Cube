@@ -697,7 +697,7 @@ void USB_vDevInit(USB_HandleType * pxUSB, const USB_InitType * pxConfig)
         uint8_t ucEpCount = USB_ENDPOINT_COUNT(pxUSB);
 
         /* Set Device Mode */
-        MODIFY_REG(pxUSB->Inst->GUSBCFG.w,
+        MODIFY_REG_SUPER_SPECIAL_FOR_SOME_UNKNOWN_REASON_HAD_AN_UNDEF_AND_IT_WAS_BREAKING_EVERYTHING(pxUSB->Inst->GUSBCFG.w,
                 USB_OTG_GUSBCFG_FHMOD | USB_OTG_GUSBCFG_FDMOD,
                 USB_OTG_GUSBCFG_FDMOD);
 
