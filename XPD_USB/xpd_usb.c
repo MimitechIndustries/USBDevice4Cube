@@ -248,20 +248,20 @@ static void USB_prvTransmitPacket(USB_HandleType * pxUSB, USB_EndPointHandleType
 inline static bool USB_prvTransmitPacket_Gigabrain_PumpPacket(USB_EndPointHandleType* pxEP, bool isPull)
 {
 	struct usb_ring_buffer *rbuff = pxEP->ring_buffer;
-	if (rbuff->head == rbuff->tail) {
+	if (rbuff->head == rbuff->tail || rbuff->count_IF >= 2) {
 		return false;
 	}
+	rbuff->count_IF += 1;
 
+	uint16_t length = rbuff->transfers[rbuff->head].size;
 	if (rbuff->dest_buff_i == 0) {
-		USB_prvWritePMA(rbuff->transfers[rbuff->head].buffer, USB_EP_BDT[pxEP->RegId].TX_ADDR, usPacketLength);
-		USB_EP_BDT[pxEP->RegId].TX_COUNT = rbuff->transfers[rbuff->head].size;
+		USB_prvWritePMA(rbuff->transfers[rbuff->head].buffer, USB_EP_BDT[pxEP->RegId].TX_ADDR, length);
+		USB_EP_BDT[pxEP->RegId].TX_COUNT = length;
 		rbuff->dest_buff_i = 1;
-		rbuff->count_IF += 1;
 	} else {
-		USB_prvWritePMA(rbuff->transfers[rbuff->head].buffer, USB_EP_BDT[pxEP->RegId].RX_ADDR, usPacketLength);
-		USB_EP_BDT[pxEP->RegId].RX_COUNT = rbuff->transfers[rbuff->head].size;
+		USB_prvWritePMA(rbuff->transfers[rbuff->head].buffer, USB_EP_BDT[pxEP->RegId].RX_ADDR, length);
+		USB_EP_BDT[pxEP->RegId].RX_COUNT = length;
 		rbuff->dest_buff_i = 0;
-		rbuff->count_IF += 1;
 	}
 
 	rbuff->head += 1;
@@ -278,7 +278,7 @@ inline static bool USB_prvTransmitPacket_Gigabrain_PumpPacket(USB_EndPointHandle
 }
 
 inline static void debug_show_status(uint32_t pv, uint32_t pf) {
-	printf("%d", pv);
+	printf("%u", pv);
 	if(pf == 1) {
 		printf("'");
 	} else {
@@ -288,11 +288,17 @@ inline static void debug_show_status(uint32_t pv, uint32_t pf) {
 
 static void USB_prvTransmitPacket_Gigabrain(USB_HandleType * pxUSB, USB_EndPointHandleType * pxEP)
 {
+	struct usb_ring_buffer *rbuff = pxEP->ring_buffer;
 	uint32_t pv = rbuff->count_IF;
 	uint32_t pf = rbuff->completion_flag;
 
-	struct usb_ring_buffer *rbuff = pxEP->ring_buffer;
 	switch(rbuff->count_IF) {
+	case 3:
+		printf("!!!\n");
+		if(rbuff->completion_flag == 1) {
+			rbuff->completion_flag = 0;
+			rbuff->count_IF -= 1;
+		}
 	case 2:
 		if(rbuff->completion_flag == 1) {
 			USB_TOGGLE(pxEP->RegId, DTOG_RX);
@@ -318,6 +324,7 @@ static void USB_prvTransmitPacket_Gigabrain(USB_HandleType * pxUSB, USB_EndPoint
 	case 0:
 		debug_show_status(pv, pf);
 		if(rbuff->completion_flag == 1) {
+			rbuff->completion_flag = 0;
 			printf("This should not happen (:");
 			// This should not happen, should not complete packet with 0 in flight...
 		} else {
@@ -842,6 +849,7 @@ void USB_vIRQHandler(USB_HandleType * pxUSB)
 
             if (pxEP->ring_buffer != NULL)
             {
+            	printf("\n");
             	pxEP->ring_buffer->completion_flag = 1;
             	USB_prvTransmitPacket_Gigabrain(pxUSB, pxEP);
             }
