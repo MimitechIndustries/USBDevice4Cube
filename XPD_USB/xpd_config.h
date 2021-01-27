@@ -70,6 +70,30 @@ typedef struct {
             __IO uint16_t DTOG_RX : 1;                      /*!<  EndPoint Data TOGGLE RX */
             __IO uint16_t CTR_RX : 1;                       /*!<  EndPoint Correct TRansfer RX */
         } b;
+        struct {
+            __IO uint16_t EA : 4;                           /*!<  EndPoint Address */
+            __IO uint16_t STAT_TX : 2;                      /*!<  EndPoint TX Status */
+            __IO uint16_t DTOG_TX : 1;                      /*!<  EndPoint Data TOGGLE TX */
+            __IO uint16_t CTR_TX : 1;                       /*!<  EndPoint Correct TRansfer TX */
+            __IO uint16_t KIND : 1;                         /*!<  EndPoint KIND */
+            __IO uint16_t TYPE : 2;                         /*!<  EndPoint TYPE */
+            __IO uint16_t SETUP : 1;                        /*!<  EndPoint SETUP */
+            __IO uint16_t STAT_RX : 2;                      /*!<  EndPoint RX Status */
+            __IO uint16_t SW_BUF : 1;                        /*!<  EndPoint Data TOGGLE RX */
+            __IO uint16_t CTR_RX : 1;                       /*!<  EndPoint Correct TRansfer RX */
+        } b_dbl_buff_tx_in;
+        struct {
+            __IO uint16_t EA : 4;                           /*!<  EndPoint Address */
+            __IO uint16_t STAT_TX : 2;                      /*!<  EndPoint TX Status */
+            __IO uint16_t SW_BUF : 1;                      /*!<  EndPoint Data TOGGLE TX */
+            __IO uint16_t CTR_TX : 1;                       /*!<  EndPoint Correct TRansfer TX */
+            __IO uint16_t KIND : 1;                         /*!<  EndPoint KIND */
+            __IO uint16_t TYPE : 2;                         /*!<  EndPoint TYPE */
+            __IO uint16_t SETUP : 1;                        /*!<  EndPoint SETUP */
+            __IO uint16_t STAT_RX : 2;                      /*!<  EndPoint RX Status */
+            __IO uint16_t DTOG_RX : 1;                        /*!<  EndPoint Data TOGGLE RX */
+            __IO uint16_t CTR_RX : 1;                       /*!<  EndPoint Correct TRansfer RX */
+        } b_dbl_buff_rx_out;
         __IO uint16_t w;
              uint32_t __RESERVED;
     } EPR[8];                                               /*!< USB endpoint register */

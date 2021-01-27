@@ -87,7 +87,7 @@ do { if (USB_REG_BIT(pxUSB,EPR[EP_ID],BIT_NAME) != 0) USB_TOGGLE(EP_ID, BIT_NAME
         (&(HANDLE)->EP.IN[(NUMBER) & 0xF]) :                            \
         (&(HANDLE)->EP.OUT[NUMBER]))
 
-#define USB_EP_DOUBLE_BUFFERED(ENDPOINT)  ((ENDPOINT)->Type == USB_EP_TYPE_ISOCHRONOUS)
+#define USB_EP_DOUBLE_BUFFERED(ENDPOINT)  ((ENDPOINT)->Type == USB_EP_TYPE_ISOCHRONOUS /*|| (ENDPOINT)->Type == USB_EP_TYPE_BULK*/)
 
 static const uint16_t usb_ausEpTypeRemap[4] = {
     USB_EP_CONTROL,
@@ -195,6 +195,7 @@ static void USB_prvReceivePacket(USB_HandleType * pxUSB, USB_EndPointHandleType 
 }
 
 /* Handle IN EP transfer */
+static uint32_t isoderp = 0;
 static void USB_prvTransmitPacket(USB_HandleType * pxUSB, USB_EndPointHandleType * pxEP)
 {
     uint16_t usPmaAddress = USB_EP_BDT[pxEP->RegId].TX_ADDR;
@@ -212,16 +213,24 @@ static void USB_prvTransmitPacket(USB_HandleType * pxUSB, USB_EndPointHandleType
     }
     else /* Double buffered endpoint */
     {
-        /* Use buffer 1 when DTOG == 1 */
-        if ((USB->EPR[pxEP->RegId].w & USB_EP_DTOG_TX) != 0)
-        {
-            USB_EP_BDT[pxEP->RegId].RX_COUNT = usPacketLength;
-            usPmaAddress = USB_EP_BDT[pxEP->RegId].RX_ADDR;
-        }
-        else
-        {
-            USB_EP_BDT[pxEP->RegId].TX_COUNT = usPacketLength;
-        }
+    	if(isoderp == 0) {
+    		isoderp = 1;
+			USB_EP_BDT[pxEP->RegId].RX_COUNT = usPacketLength;
+			usPmaAddress = USB_EP_BDT[pxEP->RegId].RX_ADDR;
+    	} else {
+    		isoderp = 0;
+			USB_EP_BDT[pxEP->RegId].TX_COUNT = usPacketLength;
+    	}
+//        /* Use buffer 1 when DTOG == 1 */
+//        if ((USB->EPR[pxEP->RegId].w & USB_EP_DTOG_TX) != 0)
+//        {
+//            USB_EP_BDT[pxEP->RegId].RX_COUNT = usPacketLength;
+//            usPmaAddress = USB_EP_BDT[pxEP->RegId].RX_ADDR;
+//        }
+//        else
+//        {
+//            USB_EP_BDT[pxEP->RegId].TX_COUNT = usPacketLength;
+//        }
 
         /* Write the data to the packet memory */
         USB_prvWritePMA(pxEP->Transfer.Data, usPmaAddress, usPacketLength);
@@ -230,8 +239,99 @@ static void USB_prvTransmitPacket(USB_HandleType * pxUSB, USB_EndPointHandleType
         if (USB->EPR[pxEP->RegId].b.DTOG_TX == USB->EPR[pxEP->RegId].b.DTOG_RX)
         {
             USB_TOGGLE(pxEP->RegId, DTOG_RX);
+            //USB_EP_SET_STATUS(pxEP->RegId, TX, VALID);
         }
     }
+}
+
+
+inline static bool USB_prvTransmitPacket_Gigabrain_PumpPacket(USB_EndPointHandleType* pxEP, bool isPull)
+{
+	struct usb_ring_buffer *rbuff = pxEP->ring_buffer;
+	if (rbuff->head == rbuff->tail) {
+		return false;
+	}
+
+	if (rbuff->dest_buff_i == 0) {
+		USB_prvWritePMA(rbuff->transfers[rbuff->head].buffer, USB_EP_BDT[pxEP->RegId].TX_ADDR, usPacketLength);
+		USB_EP_BDT[pxEP->RegId].TX_COUNT = rbuff->transfers[rbuff->head].size;
+		rbuff->dest_buff_i = 1;
+		rbuff->count_IF += 1;
+	} else {
+		USB_prvWritePMA(rbuff->transfers[rbuff->head].buffer, USB_EP_BDT[pxEP->RegId].RX_ADDR, usPacketLength);
+		USB_EP_BDT[pxEP->RegId].RX_COUNT = rbuff->transfers[rbuff->head].size;
+		rbuff->dest_buff_i = 0;
+		rbuff->count_IF += 1;
+	}
+
+	rbuff->head += 1;
+	if(rbuff->head >= rbuff->size) {
+		rbuff->head = 0;
+	}
+
+	if(isPull) {
+		printf(">");
+	} else {
+		printf("/");
+	}
+	return true;
+}
+
+inline static void debug_show_status(uint32_t pv, uint32_t pf) {
+	printf("%d", pv);
+	if(pf == 1) {
+		printf("'");
+	} else {
+		printf('.');
+	}
+}
+
+static void USB_prvTransmitPacket_Gigabrain(USB_HandleType * pxUSB, USB_EndPointHandleType * pxEP)
+{
+	uint32_t pv = rbuff->count_IF;
+	uint32_t pf = rbuff->completion_flag;
+
+	struct usb_ring_buffer *rbuff = pxEP->ring_buffer;
+	switch(rbuff->count_IF) {
+	case 2:
+		if(rbuff->completion_flag == 1) {
+			USB_TOGGLE(pxEP->RegId, DTOG_RX);
+			debug_show_status(pv, pf);
+			rbuff->completion_flag = 0;
+			rbuff->count_IF -= 1;
+			USB_prvTransmitPacket_Gigabrain_PumpPacket(pxEP, true);
+		}
+		break;
+	case 1:
+		debug_show_status(pv, pf);
+		if(rbuff->completion_flag == 1) {
+			rbuff->completion_flag = 0;
+			rbuff->count_IF -= 1;
+			if(USB_prvTransmitPacket_Gigabrain_PumpPacket(pxEP, true)) {
+				USB_TOGGLE(pxEP->RegId, DTOG_RX);
+				USB_prvTransmitPacket_Gigabrain_PumpPacket(pxEP, true);
+			}
+		} else {
+			USB_prvTransmitPacket_Gigabrain_PumpPacket(pxEP, false);
+		}
+		break;
+	case 0:
+		debug_show_status(pv, pf);
+		if(rbuff->completion_flag == 1) {
+			printf("This should not happen (:");
+			// This should not happen, should not complete packet with 0 in flight...
+		} else {
+			// Prime the pump with both buffers
+			USB_prvTransmitPacket_Gigabrain_PumpPacket(pxEP, false);
+			USB_prvTransmitPacket_Gigabrain_PumpPacket(pxEP, false);
+			USB_TOGGLE(pxEP->RegId, DTOG_RX);
+		}
+		break;
+	}
+
+
+
+
 }
 
 /* Opens EP0 bidirectional dedicated control endpoint */
@@ -579,6 +679,15 @@ void USB_vEpSend(
     USB_prvTransmitPacket(pxUSB, pxEP);
 }
 
+
+void USB_vEpSend_Gigabrain(
+        USB_HandleType *    pxUSB,
+        uint8_t             ucEpAddress)
+{
+    USB_EndPointHandleType * pxEP = &pxUSB->EP.IN[ucEpAddress & 0xF];
+    USB_prvTransmitPacket_Gigabrain(pxUSB, pxEP);
+}
+
 /**
  * @brief Initiates data reception on the OUT endpoint.
  * @param pxUSB: pointer to the USB handle structure
@@ -731,29 +840,37 @@ void USB_vIRQHandler(USB_HandleType * pxUSB)
             /* Clear TX complete flag */
             USB_EP_FLAG_CLEAR(usEpId, CTR_TX);
 
-            /* Double buffering */
-            if ((USB_EP_DOUBLE_BUFFERED(pxEP)) && ((usEpReg & USB_EP_DTOG_TX) == 0))
+            if (pxEP->ring_buffer != NULL)
             {
-                /* written from endpoint 1 buffer */
-                usDataCount = USB_EP_BDT[usEpId].RX_COUNT & 0x3FF;
+            	pxEP->ring_buffer->completion_flag = 1;
+            	USB_prvTransmitPacket_Gigabrain(pxUSB, pxEP);
             }
             else
             {
-                /* written from endpoint 0 (Tx) buffer */
-                usDataCount = USB_EP_BDT[usEpId].TX_COUNT & 0x3FF;
-            }
-            pxEP->Transfer.Data += usDataCount;
+				/* Double buffering */
+				if ((USB_EP_DOUBLE_BUFFERED(pxEP)) && ((usEpReg & USB_EP_DTOG_TX) == 0))
+				{
+					/* written from endpoint 1 buffer */
+					usDataCount = USB_EP_BDT[usEpId].RX_COUNT & 0x3FF;
+				}
+				else
+				{
+					/* written from endpoint 0 (Tx) buffer */
+					usDataCount = USB_EP_BDT[usEpId].TX_COUNT & 0x3FF;
+				}
+				pxEP->Transfer.Data += usDataCount;
 
-            /* If the last packet of the data */
-            if (pxEP->Transfer.Progress == 0)
-            {
-                /* Transmission complete */
-                USB_vDataInCallback(pxUSB, pxEP);
-            }
-            else
-            {
-                /* Continue data transmission */
-                USB_prvTransmitPacket(pxUSB, pxEP);
+				/* If the last packet of the data */
+				if (pxEP->Transfer.Progress == 0)
+				{
+					/* Transmission complete */
+					USB_vDataInCallback(pxUSB, pxEP);
+				}
+				else
+				{
+					/* Continue data transmission */
+					USB_prvTransmitPacket(pxUSB, pxEP);
+				}
             }
         }
     }
