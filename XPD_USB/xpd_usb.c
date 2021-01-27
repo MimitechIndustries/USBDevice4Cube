@@ -244,6 +244,8 @@ static void USB_prvTransmitPacket(USB_HandleType * pxUSB, USB_EndPointHandleType
     }
 }
 
+#include <stdio.h>
+
 
 inline static bool USB_prvTransmitPacket_Gigabrain_PumpPacket(USB_EndPointHandleType* pxEP, bool isPull)
 {
@@ -255,11 +257,15 @@ inline static bool USB_prvTransmitPacket_Gigabrain_PumpPacket(USB_EndPointHandle
 
 	uint16_t length = rbuff->transfers[rbuff->head].size;
 	if (rbuff->dest_buff_i == 0) {
+		printf("w%d", rbuff->head);
 		USB_prvWritePMA(rbuff->transfers[rbuff->head].buffer, USB_EP_BDT[pxEP->RegId].TX_ADDR, length);
+		printf(";");
 		USB_EP_BDT[pxEP->RegId].TX_COUNT = length;
 		rbuff->dest_buff_i = 1;
 	} else {
+		printf("W%d", rbuff->head);
 		USB_prvWritePMA(rbuff->transfers[rbuff->head].buffer, USB_EP_BDT[pxEP->RegId].RX_ADDR, length);
+		printf(":");
 		USB_EP_BDT[pxEP->RegId].RX_COUNT = length;
 		rbuff->dest_buff_i = 0;
 	}
@@ -282,7 +288,7 @@ inline static void debug_show_status(uint32_t pv, uint32_t pf) {
 	if(pf == 1) {
 		printf("'");
 	} else {
-		printf('.');
+		printf(".");
 	}
 }
 
